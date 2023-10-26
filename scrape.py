@@ -2,6 +2,7 @@ import matplotlib.pyplot as plt
 import matplotlib.ticker as mticker
 import pandas as pd
 import sys
+import pickle
 
 args = sys.argv[1:]
 
@@ -18,11 +19,26 @@ show_data = {}
 basics = basics[basics['titleType'].isin(['tvSeries', 'tvEpisode'])]
 shows = basics[basics['originalTitle'].isin(args)]
 shows = shows[shows['titleType'] == 'tvSeries']
-shows = shows.drop_duplicates(subset = 'originalTitle', keep = 'last').set_index('originalTitle')
+shows = shows.set_index('originalTitle')
 episode = episode.set_index('parentTconst')
 for show in args:
+
     try:
-        code = shows.loc[show]['tconst']
+        results = shows.loc[[show]]
+        code = ""
+        if len(results) > 1:
+            print(f'Multiple results found for "{show}", select from options below:')
+            for i in range(0, 2):
+                result = results.iloc[i]
+                title = result.name
+                c = result['tconst']
+                yr = result['startYear']
+                print(f"Press {i+1} for {title} ({yr}), IMDb: https://www.imdb.com/title/{c}")
+            selection = int(input(f"Selection (number 1 through {len(results)}): ")) - 1
+            code = results.iloc[selection]['tconst']
+        else:
+            code = shows.loc[show]['tconst']
+            
         episodes = episode.loc[code]
         episodes = episodes.merge(basics).merge(ratings).set_index('episodeNumber')
         episodes = episodes.rename(columns={'originalTitle' : 'title'}).drop(columns=['tconst', 'titleType'])
@@ -35,8 +51,10 @@ for show in args:
                 seasons[season_num][ep_num] = seasons[season_num][ep_num].to_dict(orient = 'list')
                 seasons[season_num][ep_num] = {k : v[0] for k,v in seasons[season_num][ep_num].items()}
         show_data[show] = seasons
+
     except KeyError:
-        pass
+        print("No entries found for", show)
+
 
 
 for title, title_data in show_data.items():
@@ -44,6 +62,7 @@ for title, title_data in show_data.items():
     plt.gca().xaxis.set_major_locator(mticker.MultipleLocator(1))
     for sn, sn_data in title_data.items():
         plt.plot(list(range(1, 1 + len(sn_data))), [show_data[title][sn][ep + 1]['averageRating'] for ep in range(len(sn_data))])
+    plt.ylim(4, 10)
     plt.ylabel('Rating')
     plt.xlabel('Episode')
     plt.title('Ratings per Episode of ' + title)
@@ -60,6 +79,7 @@ for title, title_data in show_data.items():
         num_eps += len(sn_data.keys())
         ratings += [show_data[title][sn][ep + 1]['averageRating'] for ep in range(len(sn_data))]
     plt.plot(list(range(1, 1 + num_eps)), ratings)
+plt.ylim(4, 10)
 plt.ylabel('Rating')
 plt.xlabel('Episode')
 plt.title('Ratings per Episode')
